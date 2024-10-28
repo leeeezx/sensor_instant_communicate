@@ -5,13 +5,6 @@
 import serial
 import time
 
-from PyQt6.QtQml import kwargs
-
-port_name = 'COM10'
-baudrate = 19200
-timeout = 1
-# 配置串口
-ser = serial.Serial(port_name, baudrate, timeout)  # 根据实际情况修改端口和波特率
 
 # 假设串口在GUI中被打开
 # 如果在GUI中选择的是通讯模式2acsii自动发送（这个在GUI程序中进行判断）
@@ -42,49 +35,98 @@ class AcsiiSendModel():
         if kwargs:
             raise ValueError('猪头，压根没有这玩意！： {!r}'.format(kwargs))
 
-
     def read_sensor_data(self):
         """
-        在ascii通讯模式下，读取串口中的传感器数据
-
-        :return:
+        在ascii通讯模式下读取串口数据：
+        1. 首先找到第一个回车符(0D)作为数据同步点
+        2. 之后的数据才开始正式接收和解码处理
         """
-        # 检查串口是否打开
         if not ser.is_open:
             raise serial.SerialException("串口未打开")
 
-        buffer = bytearray()                # 创建了一个空的字节串对象
-        last_receive_time = time.time()     # 建立开始时间戳
+        buffer = bytearray()    # 创建空的字节串
+        chunk_size = 512       # 增大读取块大小，以适应高频率数据
+        report_count = 50       # 一次处理的报文数量
+        reports = []  # 创建报文空列表
+        # total_reports = 0  # 用于累计总报文数
 
-        # 如果检测到对应串口打开且有数据累积，开始执行数据读取
-        while True:
-            if ser.in_waiting:              # 检查是否串口中是否有数据被读取
-                byte = ser.read(1)          # ！！！效率低！！！从串口中读取一个字节的数据。read以字节为单位对串口数据进行读取。
-                buffer += byte              # ！！！效率低！！！将读取的数据赋值给buffer。原buffer的所有字节后跟着byte的内容
-                last_receive_time = time.time() # 更新时间戳，目的是记录最后一次接收数据的时间
+        while True:             # 进入数据处理循环
+            # 读取新数据并添加到buffer
+            if ser.in_waiting:  # 如果串口中有数据等待
+                # print('串口有数据')
+                chunk = ser.read(min(ser.in_waiting, chunk_size))   # 从等待区和设置的chunk区中，选一个较小的区，进行读取操作
+                buffer.extend(chunk)    # 添加到buffer中
 
-                # 方法1：检查是否以回车符结束
-                if byte == b'\r':
-                    yield buffer.decode('ascii').strip()
-                    buffer = b''
+            # 处理buffer中的数据
+
+            while len(buffer) >= 7:         # 当buffer超过默认报文长度7
+                cr_index = buffer.find(b'\r')       # cr_index作为空格符的索引
+                if cr_index == -1 or cr_index < 6:  # 如果cr_index不存在或小于6。防止串口刚开始接收数据时，数据被截断。
+                    break       # 没有完整报文，退出循环
+
+                valid_data = buffer[:cr_index + 1]
+                buffer = buffer[cr_index + 1:]  # 更新buffer
+                # print('buffer已经更新')
+
+                try:
+                    decoded_data = valid_data.decode('ascii').strip()
+                    reports.append(decoded_data)
+                    # print('report添加完毕')
+                    if len(reports) >= report_count:
+                        # print('report已抛出')
+                        # total_reports += len(reports)       # 采集率计算
+                        yield reports
+                        reports = []
+                except UnicodeDecodeError:
+                    print("解码错误，丢弃无效数据")
+
+            # 如果buffer过大，可能表示数据积压，清理旧数据
+            if len(buffer) > 1024:
+                buffer = buffer[-512:]
+                print("警告：数据积压，清理旧数据")
+
+            # 如果没有足够的报文，短暂等待更多数据到达
+            if not reports:
+                time.sleep(0.005)  # 等待时间，可根据需要调整
 
 
-            #     # 方法2：检查是否达到固定长度。！！！！逻辑不对，不一定达到了七个字节就是一个符合标准的报文。
-            #     if len(buffer) == 7:
-            #         yield buffer.decode('ascii').strip()
-            #         buffer = b''
-            #
-            # # 方法3：检查时间间隔。！！！！这里逻辑也不一定对。
-            # elif time.time() - last_receive_time > 0.1:  # 假设最小间隔为100ms
-            #     if buffer:
-            #         yield buffer.decode('ascii').strip()
-            #         buffer = b''
-            #
+if __name__ == '__main__':
+    # 测试代码
+    port_name = 'COM10'
+    baudrate = 115200
+    timeout = 1
+    bytesize = 8
+    # 配置串口
+    ser = serial.Serial(port=port_name,
+                        baudrate=baudrate,
+                        bytesize=bytesize,
+                        timeout=timeout)  # 根据实际情况修改端口和波特率
 
-    # # 使用示例
-    # for data in read_sensor_data():
-    #     try:
-    #         value = float(data.replace(' ', ''))
-    #         print(f"接收到的数值: {value}")
-    #     except ValueError:
-    #         print(f"无效数据: {data}")
+
+    try:
+        acsii = AcsiiSendModel()
+        total_reports = 0
+        print('马上开始')
+        start_time = time.time()
+        run_duration = 10
+        all_data = []
+        # time.sleep(1)
+
+        for reports in acsii.read_sensor_data():
+            # print(reports)
+            total_reports += len(reports)
+            all_data.extend(reports)
+            if time.time() - start_time > run_duration:
+                break
+    finally:
+        if 'ser' in locals() and ser.is_open:
+            ser.close()
+            print("串口已关闭")
+
+        end_time = time.time()
+        duration = end_time - start_time
+        sampling_rate = total_reports / duration
+        print(f"平均采集率: {sampling_rate:.2f} 个/秒")
+        print("\n所有采集到的数值:")
+        for i, data in enumerate(all_data, 1):
+            print(f"{i}: {data}")
