@@ -1,15 +1,20 @@
 # test
 test文件夹下所有.py文件的说明  
 
-## test_GUI
-测试图形化界面
+## GUI
+图形化界面测试
+
+### test_sensor_GUI
+完整的传感器数据采集界面
+
+### test_serialport_GUI
+针对选择传感器串口，没有实时显示数据的功能。
 
 ## test_of_hex
 关于模式3hex快速发送模式的测试程序
 
 ## test_of_ascii
 关于模式2ascii主动发送协议的测试程序
-
 
 ## test_of_modbus
 关于**modbus模式**下的测试程序
