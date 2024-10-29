@@ -105,24 +105,27 @@ if __name__ == '__main__':
 
     try:
         acsii = AcsiiSendModel()
-        total_reports = 0
+        total_reports = 0           # 采集率初始计数设置0
+
         print('马上开始')
-        start_time = time.time()
-        run_duration = 10
-        all_data = []
+
+        start_time = time.time()    # 采集率初始时间标记
+        run_duration = 10           # 可选设置，测试时间
+        all_data = []               # 创建空列表，用于收集已经解码的数据
         # time.sleep(1)
 
         for reports in acsii.read_sensor_data():
             # print(reports)
-            total_reports += len(reports)
-            all_data.extend(reports)
-            if time.time() - start_time > run_duration:
+            total_reports += len(reports)       # 循环累加report数量，用于采集率计算。report已经是解码好的数值数据
+            all_data.extend(reports)            # 将每一次的report收集起来，用于最后直观展示出来
+            if time.time() - start_time > run_duration:     # 如果有测试时间，检查是否达到了测试时间，达到测试时间就停止运行
                 break
     finally:
-        if 'ser' in locals() and ser.is_open:
+        if 'ser' in locals() and ser.is_open:   # 确保程序结束后关闭串口
             ser.close()
             print("串口已关闭")
 
+        # print出有效的统计数据，方便观察程序的性能
         end_time = time.time()
         duration = end_time - start_time
         sampling_rate = total_reports / duration
