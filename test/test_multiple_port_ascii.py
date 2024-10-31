@@ -4,6 +4,7 @@
 
 import threading
 from queue import Queue
+from collections import deque
 import numpy as np
 import time
 import logging
@@ -29,7 +30,7 @@ class ThreeDimensionalForceModel:
             self.models[dimension] = AsciiSendModel(**config)       # 创建实例
             self.queues[dimension] = Queue()                        # 创建Queue实例
 
-    def read_single_dimension_data(self, dimension: str):
+    def read_dimension_data(self, dimension: str):
         """
         读取单个特定维度的数据
 
@@ -45,13 +46,25 @@ class ThreeDimensionalForceModel:
 
         :return: 线程列表
         """
-        threads = []                            # 创建一个空列表，用于存储即将创建的所有线程
+        threads = {}                            # 创建一个空列表，用于存储即将创建的所有线程
         for dimension in self.models.keys():    # 开始一个循环,遍历 self.models 字典中的所有键。这些键代表不同的维度(如 'X', 'Y', 'Z')。
-            thread = threading.Thread(target=self.read_single_dimension_data, args=(dimension,))   # threading.Thread 创建一个新的线程对象；target=self.read_dimension_data 指定线程要执行的函数；args=(dimension,) 传递给目标函数的参数,这里是维度名称。
+            thread = threading.Thread(target=self.read_dimension_data, args=(dimension,))   # threading.Thread 创建一个新的线程对象；target=self.read_dimension_data 指定线程要执行的函数；args=(dimension,) 传递给目标函数的参数,这里是维度名称。
             thread.daemon = True
             thread.start()
-            threads.append(thread)
+            threads[dimension] = thread
         return threads
+
+    def get_dimension_data(self, dimension: str) -> List[str]:
+        """
+        获取单个维度的数据
+
+        :param dimension:
+        :return:
+        """
+        data = []
+        while not self.queues[dimension].empty():
+            data.extend(self.queues[dimension].get())
+        return data
 
     def get_data(self) -> Dict[str, List[str]]:
         """

@@ -7,8 +7,8 @@ import pyqtgraph as pg
 from collections import deque
 
 # 从现有文件导入必要的类和函数
-from test.test_of_modbus.test_modbus_03 import SensorReader, convert_address
-
+# from test.test_of_modbus.test_modbus_03 import SensorReader, convert_address
+from test import test_multiple_port_ascii
 
 class SensorMonitorApp(QMainWindow):
     def __init__(self):
