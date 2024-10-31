@@ -1,1 +1,3 @@
-力传感器数据实时导出
+力传感器数据实时导出  
+
+sensor_with_robot_arm对应的程序是pipe_rokae_force.cpp
