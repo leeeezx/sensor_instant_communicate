@@ -20,7 +20,7 @@ import struct
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class AsciiSendModel():
+class AsciiSendModel:
     """
     关于传感器ascii模式的类，包括参数设置和工具函数
     """
@@ -68,6 +68,8 @@ class AsciiSendModel():
             port=self.port_name,
             baudrate=self.baudrate,
             bytesize=self.bytesize,
+            parity=self.parity,
+            stopbits=self.stopbits,
             timeout=self.timeout
         )
 
@@ -164,7 +166,8 @@ class PipeTransmitter:
         """
         if not os.path.exists(self.pipe_path):  # 检查指定路径管道是否存在，如果不存在则创建一个新的
             os.mkfifo(self.pipe_path)
-        self.fifo = os.open(self.pipe_path, os.O_WRONLY)    # 只写模式打开管道，同时修改文件描述符，代表已经打开
+            logger.info(f"创建命名管道: {self.pipe_path}")
+        self.fifo = os.open(self.pipe_path, os.O_WRONLY)    # 只写模式打开指定路径管道，将信息赋值给文件描述符，用来代表管道相关信息（开关状态、路径）
         logger.info(f"管道已打开: {self.pipe_path}")          # 日志记录，管道已经打开
 
     def send_data(self, data: str):
@@ -177,7 +180,12 @@ class PipeTransmitter:
         if not self.fifo:                       # 根据描述符，检查管道是否打开
             raise RuntimeError("管道未打开")
         encoded_data = data.encode('utf-8')     # 将待发送字符串数据修改为UTF-8编码
-        os.write(self.fifo, struct.pack('I', len(encoded_data)) + encoded_data) # 打包"数据长度+数据内容"，然后一起发送
+        packed_length = struct.pack('<I', len(encoded_data))  # 明确使用小端字节序
+        try:
+            os.write(self.fifo, packed_length + encoded_data) # 通过fifo定位管道，然后一起发送"数据长度+数据内容"。
+        except BrokenPipeError:
+            logging.error("管道连接断开")
+            raise
 
     def close(self):
         """
@@ -204,8 +212,7 @@ def run_data_transmission(port_name: str, baudrate: int, pipe_path: str, run_dur
         start_time = time.time()
         # buffer = []
         for reports in ascii_model.read_sensor_data():  # 积累了指定数量的数据后，返回一次reports。即由ascii_model.read_sensor_data()来触发循环。
-            # buffer.extend(reports)                    # 每次输出的reports长度理论上是一样的
-
+                                                        # 每次输出的reports长度理论上是一样的
             data_to_send = ' '.join(reports)            # 将[str, str, ...]转换为一个连续的单一字符串，以空格为分隔符
             pipe_transmitter.send_data(data_to_send)    # 调用send_data发送
 
@@ -215,11 +222,6 @@ def run_data_transmission(port_name: str, baudrate: int, pipe_path: str, run_dur
 
             if run_duration and time.time() - start_time > run_duration:
                 break
-
-        # # 发送剩余的数据
-        # if buffer:
-        #     data_to_send = ' '.join(buffer)
-        #     pipe_transmitter.send_data(data_to_send)
 
     except Exception as e:
         logger.error(f"发生错误: {e}", exc_info=True)
