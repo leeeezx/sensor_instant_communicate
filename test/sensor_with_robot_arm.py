@@ -121,7 +121,7 @@ class AsciiSendModel():
                 buffer = buffer[cr_index + 1:]  # 更新buffer
 
                 try:
-                    decoded_data = valid_data.decode('ascii').strip()
+                    decoded_data = valid_data.decode('ascii').strip()   # 将采集到的数据按照ascii编码进行解码，转换为str类型，然后去除首尾的空白符
                     reports.append(decoded_data)
                     # print('report添加完毕')
                     if len(reports) >= report_count:
@@ -177,7 +177,7 @@ class PipeTransmitter:
         if not self.fifo:                       # 根据描述符，检查管道是否打开
             raise RuntimeError("管道未打开")
         encoded_data = data.encode('utf-8')     # 将待发送字符串数据修改为UTF-8编码
-        os.write(self.fifo, struct.pack('I', len(encoded_data)) + encoded_data) # 先发送数据长度，再发送真实数据
+        os.write(self.fifo, struct.pack('I', len(encoded_data)) + encoded_data) # 打包"数据长度+数据内容"，然后一起发送
 
     def close(self):
         """
@@ -202,23 +202,24 @@ def run_data_transmission(port_name: str, baudrate: int, pipe_path: str, run_dur
 
         logger.info("开始数据传输")
         start_time = time.time()
-        buffer = []
-        for reports in ascii_model.read_sensor_data():
-            buffer.extend(reports)
+        # buffer = []
+        for reports in ascii_model.read_sensor_data():  # 积累了指定数量的数据后，返回一次reports。即由ascii_model.read_sensor_data()来触发循环。
+            # buffer.extend(reports)                    # 每次输出的reports长度理论上是一样的
 
-            # 当缓冲区达到采集数据量的一半时发送
-            if len(buffer) >= len(reports) // 2:
-                data_to_send = ' '.join(buffer)
-                pipe_transmitter.send_data(data_to_send)
-                buffer.clear()
+            data_to_send = ' '.join(reports)            # 将[str, str, ...]转换为一个连续的单一字符串，以空格为分隔符
+            pipe_transmitter.send_data(data_to_send)    # 调用send_data发送
+
+            # 或者逐条发送
+            # for report in reports:
+            #     pipe_transmitter.send_data(report)
 
             if run_duration and time.time() - start_time > run_duration:
                 break
 
-        # 发送剩余的数据
-        if buffer:
-            data_to_send = ' '.join(buffer)
-            pipe_transmitter.send_data(data_to_send)
+        # # 发送剩余的数据
+        # if buffer:
+        #     data_to_send = ' '.join(buffer)
+        #     pipe_transmitter.send_data(data_to_send)
 
     except Exception as e:
         logger.error(f"发生错误: {e}", exc_info=True)

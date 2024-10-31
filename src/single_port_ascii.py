@@ -201,7 +201,7 @@ def run_ascii_send_model(run_duration: Optional[float] = None,
         print('马上开始')
 
         start_time = time.time()
-        for reports in ascii_model.read_sensor_data():
+        for reports in ascii_model.read_sensor_data():  # 积累了指定数量的数据后，返回一次reports。即由ascii_model.read_sensor_data()来触发循环
             if enable_test_info:
                 test_info.add_reports(reports)
 
