@@ -143,26 +143,51 @@ class AsciiSendModel():
 
 
 class PipeTransmitter:
+    """
+    管道传输
+
+    """
     def __init__(self, pipe_path: str = '/tmp/sensor_data_pipe'):
+        """
+        初始化
+
+        :param pipe_path: 指定的管道路径
+        """
         self.pipe_path = pipe_path
-        self.fifo = None
+        self.fifo = None            # fifo是文件描述符
 
     def open(self):
-        if not os.path.exists(self.pipe_path):
+        """
+        打开管道
+
+        :return:
+        """
+        if not os.path.exists(self.pipe_path):  # 检查指定路径管道是否存在，如果不存在则创建一个新的
             os.mkfifo(self.pipe_path)
-        self.fifo = os.open(self.pipe_path, os.O_WRONLY)
-        logger.info(f"管道已打开: {self.pipe_path}")
+        self.fifo = os.open(self.pipe_path, os.O_WRONLY)    # 只写模式打开管道，同时修改文件描述符，代表已经打开
+        logger.info(f"管道已打开: {self.pipe_path}")          # 日志记录，管道已经打开
 
     def send_data(self, data: str):
-        if not self.fifo:
+        """
+        发送数据
+
+        :param data: 待发送的数据
+        :return:
+        """
+        if not self.fifo:                       # 根据描述符，检查管道是否打开
             raise RuntimeError("管道未打开")
-        encoded_data = data.encode('utf-8')
+        encoded_data = data.encode('utf-8')     # 将待发送字符串数据修改为UTF-8编码
         os.write(self.fifo, struct.pack('I', len(encoded_data)) + encoded_data) # 先发送数据长度，再发送真实数据
 
     def close(self):
+        """
+        关闭管道
+
+        :return:
+        """
         if self.fifo:
             os.close(self.fifo)
-            self.fifo = None
+            self.fifo = None        # 将描述符归位
             logger.info("管道已关闭")
 
 
